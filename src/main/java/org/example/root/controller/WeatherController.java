@@ -17,6 +17,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/weather")
 public class WeatherController {
+
     private final WeatherService weatherService;
 
     @Autowired
@@ -27,12 +28,11 @@ public class WeatherController {
     @GetMapping
     public Map<String, Object> getWeather(
             @RequestParam String city,
-            @RequestParam(required = false) String country,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         Map<String, Object> result = new LinkedHashMap<>();
         try {
-            LocationDto location = weatherService.geocodeCity(city, country);
+            LocationDto location = weatherService.geocodeCity(city, null);
             if (location == null) {
                 result.put("error", "Manzil topilmadi: " + city);
                 return result;

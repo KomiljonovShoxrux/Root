@@ -31,7 +31,7 @@ public class WeatherService {
     // 🌍 Shahar nomidan koordinata olish
     public LocationDto geocodeCity(String city, String country) {
         try {
-            String query = country != null ? city + "," + country : city;
+            String query = city; // faqat shahar
             String url = String.format(
                     "https://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s",
                     query, apiKey
