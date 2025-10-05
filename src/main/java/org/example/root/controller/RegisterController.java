@@ -38,6 +38,7 @@ public class RegisterController {
         return new ResponseEntity<>(result, HttpStatus.OK);
     }
 
+
     @PutMapping("/{id}")
     public HttpEntity<?> updateRegister(@PathVariable Long id, @RequestBody Registerdto registerdto) {
         Result result = registerService.updateRegister(registerdto, id);
