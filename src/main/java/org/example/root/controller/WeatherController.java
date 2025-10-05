@@ -17,7 +17,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-@CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/weather")
 public class WeatherController {
