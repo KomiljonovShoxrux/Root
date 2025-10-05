@@ -36,7 +36,7 @@ public class WeatherController {
     ) {
         try {
             // 🔹 1. Koordinata olish
-            var location = weatherService.geocodeCity(city, null);
+            var location = weatherService.geocodeCity(city);
             if (location == null) {
                 throw new RuntimeException("Shahar topilmadi: " + city);
             }

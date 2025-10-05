@@ -29,16 +29,19 @@ public class WeatherService {
     private String apiKey;
 
     // 🌍 Shahar nomidan koordinata olish
-    public LocationDto geocodeCity(String city, String country) {
+    public LocationDto geocodeCity(String city) {
         try {
-            String query = city; // faqat shahar
             String url = String.format(
-                    "https://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s",
-                    query, apiKey
+                    "http://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s",
+                    city, apiKey
             );
 
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            if (response.getStatusCode() != HttpStatus.OK) return null;
+            System.out.println("API javobi: " + response.getBody());
+
+            if (response.getStatusCode() != HttpStatus.OK) {
+                throw new RuntimeException("Geocoding so‘rovi muvaffaqiyatsiz!");
+            }
 
             var jsonArray = JsonParser.parseString(response.getBody()).getAsJsonArray();
             if (jsonArray.size() == 0) return null;
@@ -51,6 +54,7 @@ public class WeatherService {
             return new LocationDto(name, lat, lon);
 
         } catch (Exception e) {
+            e.printStackTrace();
             throw new RuntimeException("Geocodingda xatolik: " + e.getMessage());
         }
     }
