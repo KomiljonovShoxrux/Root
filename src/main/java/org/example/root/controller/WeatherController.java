@@ -19,23 +19,27 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 @CrossOrigin(origins = "*")
 @RestController
-@RequiredArgsConstructor
 @RequestMapping("/api/weather")
 public class WeatherController {
 
     private final WeatherService weatherService;
 
+    @Autowired
+    public WeatherController(WeatherService weatherService) {
+        this.weatherService = weatherService;
+    }
+
     /**
      * GET /api/weather?city=Tashkent&date=2025-10-05
      */
     @GetMapping
-    public WeatherResponse getWeather(
+    public ResponseEntity<WeatherResponse> getWeather(
             @RequestParam String city,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         try {
-            // 🔹 1. Koordinata olish
+            // 1️⃣ Shahar koordinatalarini olish
             var location = weatherService.geocodeCity(city);
             if (location == null) {
                 throw new RuntimeException("Shahar topilmadi: " + city);
@@ -44,36 +48,42 @@ public class WeatherController {
             double lat = location.lat();
             double lon = location.lon();
 
-            // 🔹 2. Hozirgi, tarixiy yoki kelajak ob-havo tanlash
-            WeatherResponse response;
-            if (date == null || date.isEqual(LocalDate.now())) {
-                response = weatherService.fetchWeather(lat, lon);
-            } else if (date.isBefore(LocalDate.now())) {
-                response = weatherService.fetchWeatherByDate(lat, lon, date);
+            // 2️⃣ Qaysi turdagi ma’lumotni olishni aniqlaymiz
+            var now = LocalDate.now();
+            WeatherResponse baseResponse;
+
+            if (date == null || date.isEqual(now)) {
+                baseResponse = weatherService.fetchWeather(city, lat, lon);
+            } else if (date.isBefore(now)) {
+                baseResponse = weatherService.fetchWeatherByDate(lat, lon, date);
             } else {
-                response = weatherService.fetchFutureWeather(lat, lon, date);
+                baseResponse = weatherService.fetchFutureWeather(lat, lon, date);
             }
 
-            // 🔹 3. Maslahat generatsiya qilish (bitta API orqali)
+            // 3️⃣ Maslahat generatsiya qilish
             String advice = weatherService.generateAdvice(
-                    response.temp(),
-                    response.windSpeed(),
-                    response.pressure(),
-                    response.feelsLike(),
-                    response.humidity()
+                    baseResponse.temp(),
+                    baseResponse.feelsLike(),
+                    baseResponse.pressure(),
+                    baseResponse.windSpeed(),
+                    baseResponse.humidity()
             );
 
-            // 🔹 4. Maslahatni ob-havo javobiga qo‘shib qaytaramiz
-            return new WeatherResponse(
-                    response.temp(),
-                    response.feelsLike(),
-                    response.pressure(),
-                    response.humidity(),
-                    response.windSpeed(),
-                    response.main(),
-                    response.description(),
+            // 4️⃣ To‘liq javobni yig‘ib qaytaramiz (city + date bilan)
+            WeatherResponse fullResponse = new WeatherResponse(
+                    city,
+                    (date != null ? date : now),
+                    baseResponse.temp(),
+                    baseResponse.feelsLike(),
+                    baseResponse.pressure(),
+                    baseResponse.humidity(),
+                    baseResponse.windSpeed(),
+                    baseResponse.main(),
+                    baseResponse.description(),
                     advice
             );
+
+            return ResponseEntity.ok(fullResponse);
 
         } catch (Exception e) {
             throw new RuntimeException("Xatolik yuz berdi: " + e.getMessage());

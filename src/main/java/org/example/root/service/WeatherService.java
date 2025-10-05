@@ -59,7 +59,7 @@ public class WeatherService {
         }
     }
 
-    public WeatherResponse fetchWeather(double lat, double lon) {
+    public WeatherResponse fetchWeather(String city, double lat, double lon) {
         try {
             String url = String.format(
                     "https://api.openweathermap.org/data/2.5/weather?lat=%f&lon=%f&units=metric&appid=%s",
@@ -67,8 +67,9 @@ public class WeatherService {
             );
 
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            if (response.getStatusCode() != HttpStatus.OK)
+            if (response.getStatusCode() != HttpStatus.OK) {
                 throw new RuntimeException("OpenWeatherMap hozirgi ob-havo bermadi!");
+            }
 
             JsonObject root = JsonParser.parseString(response.getBody()).getAsJsonObject();
             JsonObject main = root.getAsJsonObject("main");
@@ -83,14 +84,27 @@ public class WeatherService {
             String mainDesc = weatherObj.get("main").getAsString();
             String desc = weatherObj.get("description").getAsString();
 
-            String advice = generateAdvice(temp, feelsLike, humidity, windSpeed, pressure);
+            String advice = generateAdvice(temp, feelsLike, pressure, windSpeed, humidity);
 
-            return new WeatherResponse(temp, feelsLike, pressure, humidity, windSpeed, mainDesc, desc, advice);
+            // 🌍 Bugungi sana + shahar nomi bilan to‘liq javob qaytaramiz
+            return new WeatherResponse(
+                    city,
+                    LocalDate.now(),
+                    temp,
+                    feelsLike,
+                    pressure,
+                    humidity,
+                    windSpeed,
+                    mainDesc,
+                    desc,
+                    advice
+            );
 
         } catch (Exception e) {
             throw new RuntimeException("Ob-havo olishda xatolik: " + e.getMessage());
         }
     }
+
 
     // 📅 Tarixiy ob-havo (so‘nggi 5 kun)
     public WeatherResponse fetchWeatherByDate(double lat, double lon, LocalDate date) {
