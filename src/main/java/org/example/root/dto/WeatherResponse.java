@@ -6,5 +6,6 @@ public record WeatherResponse(  double temp,
                                int humidity,
                                double windSpeed,
                                String main,
-                               String description) {
+                               String description,
+                                String advice) {
 }
