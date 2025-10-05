@@ -32,7 +32,7 @@ public class WeatherService {
     public LocationDto geocodeCity(String city) {
         try {
             String url = String.format(
-                    "http://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s",
+                    "https://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s",
                     city, apiKey
             );
 
