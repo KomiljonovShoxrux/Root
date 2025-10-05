@@ -28,7 +28,6 @@ public class WeatherService {
     @Value("${owm.api.key}")
     private String apiKey;
 
-    // 🌍 Shahar nomidan koordinata olish
     public LocationDto geocodeCity(String city) {
         try {
             String url = String.format(

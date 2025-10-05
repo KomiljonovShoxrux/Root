@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 @RestController
+
 @RequestMapping("/api/weather")
 public class WeatherController {
 
