@@ -73,23 +73,22 @@ public class WeatherService {
 
             JsonObject root = JsonParser.parseString(response.getBody()).getAsJsonObject();
             JsonObject main = root.getAsJsonObject("main");
-            JsonObject wind = root.getAsJsonObject("wind");
+            JsonObject wind = root.has("wind") ? root.getAsJsonObject("wind") : new JsonObject();
             JsonObject weatherObj = root.getAsJsonArray("weather").get(0).getAsJsonObject();
 
             double temp = main.get("temp").getAsDouble();
-            double feelsLike = main.get("feels_like").getAsDouble();
+            double feelsLike = main.has("feels_like") ? main.get("feels_like").getAsDouble() : temp;
             int pressure = main.get("pressure").getAsInt();
             int humidity = main.get("humidity").getAsInt();
-            double windSpeed = wind.get("speed").getAsDouble();
+            double windSpeed = wind.has("speed") ? wind.get("speed").getAsDouble() : 0.0;
             String mainDesc = weatherObj.get("main").getAsString();
             String desc = weatherObj.get("description").getAsString();
 
-            String advice = generateAdvice(temp, feelsLike, pressure, windSpeed, humidity);
+            String advice = generateAdvice(temp, feelsLike, humidity, windSpeed, pressure);
 
-            // 🌍 Bugungi sana + shahar nomi bilan to‘liq javob qaytaramiz
             return new WeatherResponse(
                     city,
-                    LocalDate.now(),
+                    LocalDate.now(ZoneOffset.UTC),
                     temp,
                     feelsLike,
                     pressure,
@@ -101,21 +100,23 @@ public class WeatherService {
             );
 
         } catch (Exception e) {
-            throw new RuntimeException("Ob-havo olishda xatolik: " + e.getMessage());
+            throw new RuntimeException("Ob-havo olishda xatolik: " + e.getMessage(), e);
         }
     }
 
-
-    // 📅 Tarixiy ob-havo (so‘nggi 5 kun)
-    public WeatherResponse fetchWeatherByDate(double lat, double lon, LocalDate date) {
+    // -----------------------
+    // Tarixiy ob-havo (so'nggi 5 kun ichida). ENDI city va date bilan qaytaradi.
+    public WeatherResponse fetchWeatherByDate(String city, double lat, double lon, LocalDate date) {
         try {
             LocalDate now = LocalDate.now(ZoneOffset.UTC);
             long daysBetween = ChronoUnit.DAYS.between(date, now);
 
-            if (daysBetween < 0)
+            if (daysBetween < 0) {
                 throw new RuntimeException("Tanlangan sana kelajakda. Iltimos forecast metodini ishlating.");
-            if (daysBetween > 5)
+            }
+            if (daysBetween > 5) {
                 throw new RuntimeException("Tarixiy ob-havo faqat so‘nggi 5 kun uchun mavjud.");
+            }
 
             long timestamp = date.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
 
@@ -125,43 +126,67 @@ public class WeatherService {
             );
 
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            if (response.getStatusCode() != HttpStatus.OK)
+            if (response.getStatusCode() != HttpStatus.OK) {
                 throw new RuntimeException("OpenWeatherMap tarixiy ma’lumot bermadi!");
+            }
 
             JsonObject root = JsonParser.parseString(response.getBody()).getAsJsonObject();
-            JsonObject current = root.has("data")
-                    ? root.getAsJsonArray("data").get(0).getAsJsonObject()
-                    : root.getAsJsonObject("current");
+
+            // Timemachine javobida "data" massividan bir element olinadi.
+            JsonObject current = null;
+            if (root.has("data") && root.getAsJsonArray("data").size() > 0) {
+                current = root.getAsJsonArray("data").get(0).getAsJsonObject();
+            } else if (root.has("current")) {
+                current = root.getAsJsonObject("current");
+            }
+
+            if (current == null) {
+                throw new RuntimeException("Tarixiy ma'lumot topilmadi (timemachine).");
+            }
 
             JsonObject weatherObj = current.getAsJsonArray("weather").get(0).getAsJsonObject();
 
-            double temp = current.get("temp").getAsDouble();
-            double feelsLike = current.get("feels_like").getAsDouble();
-            int pressure = current.get("pressure").getAsInt();
-            int humidity = current.get("humidity").getAsInt();
-            double windSpeed = current.get("wind_speed").getAsDouble();
+            double temp = current.has("temp") ? current.get("temp").getAsDouble() : 0.0;
+            double feelsLike = current.has("feels_like") ? current.get("feels_like").getAsDouble() : temp;
+            int pressure = current.has("pressure") ? current.get("pressure").getAsInt() : 0;
+            int humidity = current.has("humidity") ? current.get("humidity").getAsInt() : 0;
+            double windSpeed = current.has("wind_speed") ? current.get("wind_speed").getAsDouble() : 0.0;
             String main = weatherObj.get("main").getAsString();
             String desc = weatherObj.get("description").getAsString();
 
             String advice = generateAdvice(temp, feelsLike, humidity, windSpeed, pressure);
 
-            return new WeatherResponse(temp, feelsLike, pressure, humidity, windSpeed, main, desc, advice);
+            return new WeatherResponse(
+                    city,
+                    date,
+                    temp,
+                    feelsLike,
+                    pressure,
+                    humidity,
+                    windSpeed,
+                    main,
+                    desc,
+                    advice
+            );
 
         } catch (Exception e) {
-            throw new RuntimeException("Tarixiy ob-havo olishda xatolik: " + e.getMessage());
+            throw new RuntimeException("Tarixiy ob-havo olishda xatolik: " + e.getMessage(), e);
         }
     }
 
-    // 🔮 Kelajak prognozi (7 kun oldinga)
-    public WeatherResponse fetchFutureWeather(double lat, double lon, LocalDate date) {
+    // -----------------------
+    // Kelajak prognozi (7 kun oldinga). ENDI city va date bilan qaytaradi.
+    public WeatherResponse fetchFutureWeather(String city, double lat, double lon, LocalDate date) {
         try {
             LocalDate now = LocalDate.now(ZoneOffset.UTC);
             long daysAhead = ChronoUnit.DAYS.between(now, date);
 
-            if (daysAhead < 0)
-                throw new RuntimeException("Bu sana o‘tib ketgan. Tarixiy ob-havo uchun boshqa metodni ishlating.");
-            if (daysAhead > 7)
+            if (daysAhead < 0) {
+                throw new RuntimeException("Bu sana o'tib ketgan. Tarixiy ob-havo uchun boshqa metodni ishlating.");
+            }
+            if (daysAhead > 7) {
                 throw new RuntimeException("Kelajak prognozi faqat 7 kun oldinga mavjud.");
+            }
 
             String url = String.format(
                     "https://api.openweathermap.org/data/3.0/onecall?lat=%f&lon=%f&units=metric&exclude=current,minutely,hourly,alerts&appid=%s",
@@ -169,60 +194,75 @@ public class WeatherService {
             );
 
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            if (response.getStatusCode() != HttpStatus.OK)
+            if (response.getStatusCode() != HttpStatus.OK) {
                 throw new RuntimeException("OpenWeatherMap prognoz bermadi!");
+            }
 
             JsonObject root = JsonParser.parseString(response.getBody()).getAsJsonObject();
             var daily = root.getAsJsonArray("daily");
-            if (daily.size() <= daysAhead)
+
+            if (daily == null || daily.size() <= daysAhead) {
                 throw new RuntimeException("Ushbu sana uchun prognoz mavjud emas.");
+            }
 
             JsonObject forecast = daily.get((int) daysAhead).getAsJsonObject();
-            JsonObject temp = forecast.getAsJsonObject("temp");
-            JsonObject feelsLike = forecast.getAsJsonObject("feels_like");
+            JsonObject tempObj = forecast.getAsJsonObject("temp");
+            JsonObject feelsObj = forecast.getAsJsonObject("feels_like");
             JsonObject weatherObj = forecast.getAsJsonArray("weather").get(0).getAsJsonObject();
 
-            double dayTemp = temp.get("day").getAsDouble();
-            double dayFeels = feelsLike.get("day").getAsDouble();
-            int pressure = forecast.get("pressure").getAsInt();
-            int humidity = forecast.get("humidity").getAsInt();
-            double windSpeed = forecast.get("wind_speed").getAsDouble();
+            double dayTemp = tempObj.has("day") ? tempObj.get("day").getAsDouble() : 0.0;
+            double dayFeels = feelsObj.has("day") ? feelsObj.get("day").getAsDouble() : dayTemp;
+            int pressure = forecast.has("pressure") ? forecast.get("pressure").getAsInt() : 0;
+            int humidity = forecast.has("humidity") ? forecast.get("humidity").getAsInt() : 0;
+            double windSpeed = forecast.has("wind_speed") ? forecast.get("wind_speed").getAsDouble() : 0.0;
             String main = weatherObj.get("main").getAsString();
             String desc = weatherObj.get("description").getAsString();
 
             String advice = generateAdvice(dayTemp, dayFeels, humidity, windSpeed, pressure);
 
-            return new WeatherResponse(dayTemp, dayFeels, pressure, humidity, windSpeed, main, desc, advice);
+            return new WeatherResponse(
+                    city,
+                    date,
+                    dayTemp,
+                    dayFeels,
+                    pressure,
+                    humidity,
+                    windSpeed,
+                    main,
+                    desc,
+                    advice
+            );
 
         } catch (Exception e) {
-            throw new RuntimeException("Kelajak prognozi olishda xatolik: " + e.getMessage());
+            throw new RuntimeException("Kelajak prognozi olishda xatolik: " + e.getMessage(), e);
         }
     }
 
-    // 🧠 Aqlli maslahat generatori
-    public String generateAdvice(double temp, double windSpeed, int pressure, double feelsLike, int humidity) {
-        StringBuilder advice = new StringBuilder();
+    // -----------------------
+    // Maslahat generatori — tartib: temp, feelsLike, humidity, windSpeed, pressure
+    private String generateAdvice(double temp, double feelsLike, int humidity, double windSpeed, int pressure) {
+        StringBuilder sb = new StringBuilder();
 
-        // 🌡 Harorat asosida
-        if (temp <= 0) advice.append("Juda sovuq — iliq kiyining, sharf va qo‘lqop taqing. 🧣 ");
-        else if (temp <= 10) advice.append("Salqin havo — kurtka kiying. 🧥 ");
-        else if (temp <= 20) advice.append("Yengil kurtka yoki sviter yetarli bo‘ladi. 🧶 ");
-        else if (temp <= 30) advice.append("Yoqqin havo — yengil kiyim mos keladi. 👕 ");
-        else advice.append("Juda issiq — suyuqlik ko‘p iching va soyada turing. ☀️ ");
+        // Harorat
+        if (temp <= 0) sb.append("❄️ Juda sovuq! Issiq kiyining, qo‘lqop va shapka taqing. ");
+        else if (temp <= 10) sb.append("🧥 Salqin — kurtka yoki palto kiying. ");
+        else if (temp <= 20) sb.append("🧶 Yengil sviter yoki ko'ylak yetarli. ");
+        else if (temp <= 30) sb.append("😎 Iliq — yengil kiyimda yuring va suv iching. ");
+        else sb.append("🔥 Juda issiq — quyoshdan himoyalaning, ko‘p suv iching. ");
 
-        // 🌬 Shamol asosida
-        if (windSpeed > 10) advice.append("Shamol kuchli — bosh kiyim kiying. 💨 ");
-        else if (windSpeed > 5) advice.append("Yengil shamol esmoqda. 🌬 ");
+        // Shamol
+        if (windSpeed > 10) sb.append("🌬 Kuchli shamol — sharf yoki qo'lqop oling. ");
+        else if (windSpeed > 5) sb.append("💨 Yengil shamol — salqin hissi beradi. ");
 
-        // 💧 Namlik asosida
-        if (humidity > 80) advice.append("Namlik yuqori — yomg‘ir ehtimoli bor, soyabon oling. ☔ ");
-        else if (humidity < 30) advice.append("Havo quruq — suv ichishni unutmang. 💧 ");
+        // Namlik
+        if (humidity > 80) sb.append("💦 Namlik yuqori — havoda og'irlik bo'lishi mumkin. ");
+        else if (humidity < 30) sb.append("🌵 Havo quruq — teri va lablarni namlang, suv iching. ");
 
-        // 🔽 Bosim asosida
-        if (pressure < 1000) advice.append("Bosim past — boshingiz og‘risa, tinch joyda dam oling. 💤 ");
-        else if (pressure > 1020) advice.append("Bosim yuqori — yurak bilan bog‘liq muammosi bo‘lganlar ehtiyot bo‘lsin. ❤️ ");
+        // Bosim
+        if (pressure < 1000) sb.append("⚠ Past bosim — bosh og'rig‘i mumkin, dam oling. ");
+        else if (pressure > 1030) sb.append("⛰ Yuqori bosim — yurak kasalligi borlar ehtiyot bo'lsin. ");
 
-        return advice.toString().trim();
+        return sb.toString().trim();
     }
 
 }
