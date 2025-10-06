@@ -30,12 +30,6 @@ public class WeatherController {
         this.weatherService = weatherService;
     }
 
-    /**
-     * 📍 GET /api/weather?city=Tashkent&date=2025-10-05
-     * - Agar sana kiritilmasa → hozirgi ob-havo
-     * - Agar sana o‘tgan bo‘lsa → tarixiy
-     * - Agar sana kelajakda bo‘lsa → forecast
-     */
     @GetMapping
     public WeatherResponse getWeather(
             @RequestParam String city,
@@ -43,7 +37,6 @@ public class WeatherController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         try {
-            // 1️⃣ Shahar koordinatalarini olish
             LocationDto location = weatherService.geocodeCity(city);
             if (location == null) {
                 throw new RuntimeException("❌ Shahar topilmadi: " + city);
@@ -53,7 +46,6 @@ public class WeatherController {
             double lon = location.lon();
             LocalDate today = LocalDate.now();
 
-            // 2️⃣ Hozirgi, tarixiy yoki kelajak ob-havo
             WeatherResponse response;
             if (date == null || date.isEqual(today)) {
                 response = weatherService.fetchWeather(city, lat, lon);

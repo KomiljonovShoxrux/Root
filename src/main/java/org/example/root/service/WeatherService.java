@@ -103,8 +103,6 @@ public class WeatherService {
         }
     }
 
-    // -----------------------
-    // Tarixiy ob-havo (so'nggi 5 kun ichida). ENDI city va date bilan qaytaradi.
     public WeatherResponse fetchWeatherByDate(String city, double lat, double lon, LocalDate date) {
         try {
             LocalDate now = LocalDate.now(ZoneOffset.UTC);
@@ -120,8 +118,8 @@ public class WeatherService {
             long timestamp = date.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
 
             String url = String.format(
-                    "https://api.openweathermap.org/data/3.0/onecall/timemachine?lat=%f&lon=%f&dt=%d&units=metric&appid=%s",
-                    lat, lon, timestamp, apiKey
+                    "https://api.openweathermap.org/data/2.5/forecast?lat=%f&lon=%f&units=metric&lang=uz&appid=%s",
+                    lat, lon, apiKey
             );
 
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
@@ -131,7 +129,6 @@ public class WeatherService {
 
             JsonObject root = JsonParser.parseString(response.getBody()).getAsJsonObject();
 
-            // Timemachine javobida "data" massividan bir element olinadi.
             JsonObject current = null;
             if (root.has("data") && root.getAsJsonArray("data").size() > 0) {
                 current = root.getAsJsonArray("data").get(0).getAsJsonObject();
@@ -173,8 +170,7 @@ public class WeatherService {
         }
     }
 
-    // -----------------------
-    // Kelajak prognozi (7 kun oldinga). ENDI city va date bilan qaytaradi.
+
     public WeatherResponse fetchFutureWeather(String city, double lat, double lon, LocalDate date) {
         try {
             LocalDate now = LocalDate.now(ZoneOffset.UTC);
@@ -183,12 +179,12 @@ public class WeatherService {
             if (daysAhead < 0) {
                 throw new RuntimeException("Bu sana o'tib ketgan. Tarixiy ob-havo uchun boshqa metodni ishlating.");
             }
-            if (daysAhead > 7) {
-                throw new RuntimeException("Kelajak prognozi faqat 7 kun oldinga mavjud.");
+            if (daysAhead > 5) {
+                throw new RuntimeException("Kelajak prognozi faqat 5 kun oldinga mavjud (3 soatlik kesimda).");
             }
 
             String url = String.format(
-                    "https://api.openweathermap.org/data/3.0/onecall?lat=%f&lon=%f&units=metric&exclude=current,minutely,hourly,alerts&appid=%s",
+                    "https://api.openweathermap.org/data/2.5/forecast?lat=%f&lon=%f&units=metric&lang=uz&appid=%s",
                     lat, lon, apiKey
             );
 
@@ -198,36 +194,49 @@ public class WeatherService {
             }
 
             JsonObject root = JsonParser.parseString(response.getBody()).getAsJsonObject();
-            var daily = root.getAsJsonArray("daily");
+            JsonArray list = root.getAsJsonArray("list");
 
-            if (daily == null || daily.size() <= daysAhead) {
+            if (list == null || list.size() == 0) {
+                throw new RuntimeException("Prognoz topilmadi.");
+            }
+
+            JsonObject forecast = null;
+            for (var el : list) {
+                JsonObject obj = el.getAsJsonObject();
+                String dtTxt = obj.get("dt_txt").getAsString().substring(0, 10);
+                if (dtTxt.equals(date.toString())) {
+                    forecast = obj;
+                    break;
+                }
+            }
+
+            if (forecast == null) {
                 throw new RuntimeException("Ushbu sana uchun prognoz mavjud emas.");
             }
 
-            JsonObject forecast = daily.get((int) daysAhead).getAsJsonObject();
-            JsonObject tempObj = forecast.getAsJsonObject("temp");
-            JsonObject feelsObj = forecast.getAsJsonObject("feels_like");
+            JsonObject main = forecast.getAsJsonObject("main");
+            JsonObject wind = forecast.has("wind") ? forecast.getAsJsonObject("wind") : new JsonObject();
             JsonObject weatherObj = forecast.getAsJsonArray("weather").get(0).getAsJsonObject();
 
-            double dayTemp = tempObj.has("day") ? tempObj.get("day").getAsDouble() : 0.0;
-            double dayFeels = feelsObj.has("day") ? feelsObj.get("day").getAsDouble() : dayTemp;
-            int pressure = forecast.has("pressure") ? forecast.get("pressure").getAsInt() : 0;
-            int humidity = forecast.has("humidity") ? forecast.get("humidity").getAsInt() : 0;
-            double windSpeed = forecast.has("wind_speed") ? forecast.get("wind_speed").getAsDouble() : 0.0;
-            String main = weatherObj.get("main").getAsString();
+            double temp = main.get("temp").getAsDouble();
+            double feelsLike = main.has("feels_like") ? main.get("feels_like").getAsDouble() : temp;
+            int pressure = main.get("pressure").getAsInt();
+            int humidity = main.get("humidity").getAsInt();
+            double windSpeed = wind.has("speed") ? wind.get("speed").getAsDouble() : 0.0;
+            String mainDesc = weatherObj.get("main").getAsString();
             String desc = weatherObj.get("description").getAsString();
 
-            String advice = generateAdvice(dayTemp, dayFeels, humidity, windSpeed, pressure);
+            String advice = generateAdvice(temp, feelsLike, humidity, windSpeed, pressure);
 
             return new WeatherResponse(
                     city,
                     date,
-                    dayTemp,
-                    dayFeels,
+                    temp,
+                    feelsLike,
                     pressure,
                     humidity,
                     windSpeed,
-                    main,
+                    mainDesc,
                     desc,
                     advice
             );
@@ -237,8 +246,7 @@ public class WeatherService {
         }
     }
 
-    // -----------------------
-    // Maslahat generatori — tartib: temp, feelsLike, humidity, windSpeed, pressure
+
     private String generateAdvice(double temp, double feelsLike, int humidity, double windSpeed, int pressure) {
         StringBuilder sb = new StringBuilder();
 
